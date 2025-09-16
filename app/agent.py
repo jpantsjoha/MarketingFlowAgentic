@@ -13,154 +13,108 @@
 # limitations under the License.
 
 import os
-from typing import List, Literal
+import random
+from typing import List
 
 import google.auth
 from google.adk.agents import Agent, ParallelAgent, SequentialAgent
-from pydantic import BaseModel, Field
+from google.adk.tools import FunctionTool, ToolContext
 
 _, project_id = google.auth.default()
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project_id)
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
-# --- Parallel Ideation Layer ---
+# --- Tools ---
 
-trend_agent = Agent(
-    name="TrendAgent",
+def list_baseline_images(tool_context: ToolContext) -> List[str]:
+    """
+    Lists the available baseline images of the merchandise.
+    This tool should be used to select a reference image for generation.
+    """
+    image_dir = "images_baseline"
+    try:
+        files = [os.path.join(image_dir, f) for f in os.listdir(image_dir) if f.endswith(".png")]
+        return files
+    except FileNotFoundError:
+        return ["Error: 'images_baseline' directory not found."]
+
+# --- Agent Definitions ---
+
+visual_ideation_agent = Agent(
+    name="VisualIdeationAgent",
     model="gemini-2.5-flash",
-    description="Analyzes real-time market intelligence and identifies current trends relevant to the campaign.",
-    instruction="Based on the user's business intent, identify 3-5 current market trends or news that can be leveraged. Output a bulleted list.",
-    output_key="trend_ideas",
+    description="Brainstorms visual concepts for marketing assets.",
+    instruction='''Based on the user's business intent for an apparel shop, brainstorm a list of 3-5 distinct visual concepts or scenes.
+    For each concept, describe the setting, the vibe, the model (individual or couple), and the activity.
+    Example: A couple having a relaxed picnic in a sunny park, with a 'chilling, holiday vibe'.
+    Output a bulleted list of these concepts.''',
+    output_key="visual_concepts",
 )
 
-community_agent = Agent(
-    name="CommunityAgent",
+image_generation_agent = Agent(
+    name="ImageGenerationAgent",
     model="gemini-2.5-flash",
-    description="Focuses on engagement and educational content, identifying community pain points and questions.",
-    instruction="Based on the user's business intent, identify 3-5 common questions or pain points from the target community. Frame them as educational content opportunities. Output a bulleted list.",
-    output_key="community_ideas",
-)
+    description="Generates a realistic still image for a marketing campaign.",
+    instruction='''You are an AI Image Generation specialist. Your task is to generate a marketing image.
 
-content_agent = Agent(
-    name="ContentAgent",
-    model="gemini-2.5-flash",
-    description="Generates diverse, multi-media content ideas and formats.",
-    instruction="Based on the user's business intent, brainstorm 3-5 creative content ideas (e.g., blog post, video script, social media post). Specify the format for each. Output a bulleted list.",
-    output_key="content_ideas",
-)
-
-brand_agent = Agent(
-    name="BrandAgent",
-    model="gemini-2.5-flash",
-    description="Ensures all ideas align with the brand's voice, tone, and overall consistency.",
-    instruction="Based on the user's business intent, define the primary brand voice and tone for this campaign (e.g., 'professional and authoritative', 'playful and witty'). Output a short paragraph.",
-    output_key="brand_voice",
-)
-
-parallel_ideation_layer = ParallelAgent(
-    name="ParallelIdeationLayer",
-    sub_agents=[
-        trend_agent,
-        community_agent,
-        content_agent,
-        brand_agent,
-    ],
-)
-
-# --- Synthesis Layer ---
-
-synthesis_agent = Agent(
-    name="SynthesisAgent",
-    model="gemini-2.5-pro",
-    instruction='''You are a marketing strategist. Your task is to synthesize the ideas from your team into a single, cohesive campaign brief.
-
-    Use the following inputs from your team:
-    - Market Trends: {trend_ideas}
-    - Community Insights: {community_ideas}
-    - Content Ideas: {content_ideas}
-    - Brand Voice: {brand_voice}
-
-    Combine these elements into a unified campaign brief with the following sections:
-    1.  **Campaign Theme:** A short, catchy theme.
-    2.  **Brand Voice:** The defined voice and tone.
-    3.  **Key Pillars:** 3-5 core content pillars based on the trends and community insights.
-    4.  **Example Content:** 2-3 specific content pieces from the ideas provided, fleshed out slightly.
+    1.  **Review the visual concepts:** Read the concepts provided in `{visual_concepts}`.
+    2.  **Select a concept:** Choose the most compelling concept for a still image.
+    3.  **Select a baseline image:** Use the `list_baseline_images` tool to see available merchandise images and select one randomly.
+    4.  **Simulate Generation:** Combine the selected concept and baseline image into a final prompt.
+    5.  **Output the Result:** State which baseline image you used and describe the final generated image. You MUST NOT actually generate an image, only describe it.
+    Start your output with 'SIMULATED IMAGE:'.
     ''',
-    output_key="campaign_brief",
+    tools=[list_baseline_images],
+    output_key="generated_image_description",
 )
 
-# --- Validation Layer ---
-
-class Issue(BaseModel):
-    """A specific issue found during brand validation."""
-    field: str = Field(description="The specific field or area with an issue (e.g., 'Brand Voice', 'Narrative Alignment').")
-    description: str = Field(description="A detailed description of the issue found.")
-
-class BrandValidation(BaseModel):
-    """The structured output for the brand validation process."""
-    approved: bool = Field(description="Whether the campaign brief is approved to proceed.")
-    brand_score: int = Field(description="An overall score from 0-100 for brand alignment.", ge=0, le=100)
-    consistency_score: int = Field(description="An overall score from 0-100 for consistency.", ge=0, le=100)
-    compliance_issues: List[Issue] = Field(description="A list of specific compliance or brand issues found.")
-    recommendations: List[str] = Field(description="A list of actionable recommendations for improvement.")
-
-brand_assurance_agent = Agent(
-    name="BrandAssuranceAgent",
-    model="gemini-2.5-pro",
-    description="Validates the campaign brief against brand guidelines and quality standards.",
-    instruction='''You are the Brand Assurance Agent. Your job is to act as a strict quality gate.
-    Analyze the campaign brief provided in `{campaign_brief}`.
-
-    Validate it against the following criteria:
-    1.  **Brand Voice:** Is the tone (e.g., 'authentic and empowering', 'optimistic and inspiring') consistent with the brief's definition?
-    2.  **Narrative Alignment:** Does the campaign theme and content align with the business objective of launching sustainable coffee cups for millennials?
-    3.  **Content Balance:** Does the content seem to follow a healthy mix of educational and promotional material? (e.g., 60/40 split).
-    4.  **Clarity and Cohesion:** Is the brief clear, well-structured, and internally consistent?
-
-    Provide a rigorous, critical review. If there are any weaknesses, fail the validation and provide clear, actionable recommendations. Your output must be a single JSON object matching the BrandValidation schema.
-    ''',
-    output_schema=BrandValidation,
-    output_key="brand_validation_report",
-)
-
-# --- Queue & Distribution Layer ---
-
-class CampaignPriority(BaseModel):
-    """The structured output for the campaign priority queue."""
-    campaign_type: Literal["Business Campaign", "Official Announcement", "Educational", "Community", "Automated Content"] = Field(description="The classified type of the campaign.")
-    priority: int = Field(description="The assigned priority level (1-4), where 1 is the highest.", ge=1, le=4)
-    reasoning: str = Field(description="A brief justification for the assigned priority.")
-
-queue_agent = Agent(
-    name="QueueAgent",
+video_generation_agent = Agent(
+    name="VideoGenerationAgent",
     model="gemini-2.5-flash",
-    description="Analyzes the campaign brief to assign a priority for the distribution queue.",
-    instruction='''You are the Queueing Agent. Your job is to assign a priority to the campaign based on its type.
-    Analyze the campaign brief provided in `{campaign_brief}` and the original user intent.
+    description="Generates a short video for a marketing campaign.",
+    instruction='''You are an AI Video Generation specialist (simulated by the Veo-3 Gemini model).
 
-    Use the following matrix to classify the campaign and assign priority:
-    - **Priority 1 (Highest):** Business Campaign, Official Announcement (e.g., major product launch, company news).
-    - **Priority 2 (High):** Educational (e.g., tutorial, guide, deep-dive article).
-    - **Priority 3 (Medium):** Community (e.g., responding to user-generated content, engagement-focused pieces).
-    - **Priority 4 (Low):** Automated Content (e.g., simple, high-frequency memes or trends).
-
-    Based on your analysis, determine the `campaign_type` and its corresponding `priority`. Provide a brief `reasoning`. Your output must be a single JSON object matching the CampaignPriority schema.
+    1.  **Review the visual concepts:** Read the concepts provided in `{visual_concepts}`.
+    2.  **Select a concept:** Choose the most compelling concept for a short video.
+    3.  **Simulate Generation:** Describe a 5-10 second video clip based on this concept. Describe the scene, camera movement, and audio.
+    4.  **Output the Result:** You MUST NOT actually generate a video, only describe it.
+    Start your output with 'SIMULATED VIDEO:'.
     ''',
-    output_schema=CampaignPriority,
-    output_key="campaign_priority",
+    output_key="generated_video_description",
 )
 
+twitter_publisher_agent = Agent(
+    name="TwitterPublisherAgent",
+    model="gemini-2.5-flash",
+    description="Formats the generated visual assets into a social media post for X/Twitter.",
+    instruction='''You are a Social Media Manager for X/Twitter.
+    Your task is to create a tweet for the apparel shop campaign.
+
+    Use the following assets:
+    - Image Description: `{generated_image_description}`
+    - Video Description: `{generated_video_description}`
+
+    Draft a compelling tweet that is engaging, includes relevant hashtags (like #catmerch, #tshirt, #summerstyle), and has a clear call to action.
+    Mention which visual asset (image or video) would be attached.
+    ''',
+    output_key="twitter_post",
+)
 
 # --- Root Agent: Sequential Workflow ---
 
 root_agent = SequentialAgent(
-    name="MarketingFlowEngine",
+    name="VisualMarketingAgent",
     sub_agents=[
-        parallel_ideation_layer,
-        synthesis_agent,
-        brand_assurance_agent,
-        queue_agent,
+        visual_ideation_agent,
+        ParallelAgent(
+            name="VisualGenerationLayer",
+            sub_agents=[
+                image_generation_agent,
+                video_generation_agent,
+            ],
+        ),
+        twitter_publisher_agent,
     ],
-    description="An autonomous marketing engine that takes a business intent, generates a campaign brief, validates it, and assigns it a priority for distribution.",
+    description="Generates visual marketing assets for an apparel shop and formats them for social media.",
 )

@@ -8,7 +8,7 @@ The current process for creating and distributing marketing content is manual an
 
 ## Decision
 
-We will build an autonomous, AI-powered marketing system using an agentic architecture. This system will take high-level business intent as input and automate the entire campaign creation workflow, including ideation, content generation, brand validation, and prioritization.
+We will build an autonomous, AI-powered marketing system focused on **generating visual assets** for a hypothetical apparel shop. The system will take a high-level business intent (e.g., "launch a new collection"), use baseline product images as references, and automate the workflow of creating marketing concepts, generating simulated visual content (images and videos), and drafting social media posts for platforms like X/Twitter.
 
 ## Consequences
 

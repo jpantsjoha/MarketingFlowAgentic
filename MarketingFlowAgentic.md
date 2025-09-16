@@ -39,7 +39,46 @@
 
 ## 🚀 **ADK FRAMEWORK IMPLEMENTATION**
 
-### **Core Agent Architecture**
+### Core Agent Architecture
+```yaml
+# High-Level Design Pattern
+- CampaignInitiationAgent: Determines content type (visual, text) based on intent.
+- ContentGeneration (ParallelAgent):
+    - ImageAgent
+    - VideoAgent
+    - TextAgent
+- Validation (LoopAgent): Iteratively checks content against brand, QA, and narrative guidelines.
+    - ValidationAgent
+    - RevisionAgent (if validation fails)
+- SchedulingAgent: Places approved content into a priority queue.
+- PlatformFunnel (ParallelAgent): Adapts and publishes content to different social media channels.
+    - X_Publisher
+    - TikTok_Publisher
+    - YouTube_Publisher
+```
+
+### **Processing Workflow**
+```mermaid
+flowchart TD
+    A[Business Intent] --> B{Campaign Type<br>Selector};
+    B --> C[Image Agent];
+    B --> D[Video Agent];
+    B --> E[Text Agent];
+
+    subgraph "Content Generation & Validation Loop"
+        direction LR
+        C --> F{Validation Agent<br>(QA, Narrative, Brand)};
+        D --> F;
+        E --> F;
+        F -- Revision Needed --> C;
+    end
+
+    F -- Approved --> G[Queue &<br>Scheduler];
+    G --> H{Platform Funnel};
+    H --> I[X/Twitter Post];
+    H --> J[TikTok Post];
+    H --> K[YouTube Post];
+```
 ```yaml
 # Multi-Agent Orchestration Pattern (Implemented as a SequentialAgent)
 - ParallelIdeationLayer (ParallelAgent)

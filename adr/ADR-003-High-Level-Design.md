@@ -8,22 +8,47 @@ Based on our business strategy of autonomous content generation, we need a syste
 
 ## Decision
 
-We will implement a sequential, multi-layer agent pipeline orchestrated by a root `SequentialAgent`. This pipeline explicitly defines the flow of work from ideation to final prioritization.
+We will adopt a more sophisticated, multi-stage pipeline that incorporates a crucial validation and revision loop, followed by multi-platform distribution.
 
-The pipeline consists of the following stages:
-1.  **Parallel Ideation Layer (`ParallelAgent`):** Four specialized agents (`TrendAgent`, `CommunityAgent`, `ContentAgent`, `BrandAgent`) run concurrently to generate diverse ideas based on the initial business intent.
-2.  **Synthesis Layer (`Agent`):** A strategist agent receives the outputs from the ideation layer and synthesizes them into a single, cohesive campaign brief.
-3.  **Validation Layer (`Agent`):** A brand assurance agent acts as a quality gate, reviewing the synthesized brief against brand guidelines and outputting a structured validation report (pass/fail with recommendations).
-4.  **Queueing Layer (`Agent`):** A queueing agent analyzes the validated brief to assign a distribution priority based on a predefined matrix, preparing it for the subsequent distribution phase.
+The new architecture is as follows:
+1.  **Campaign Initiation:** An initial agent determines the required content type(s) (e.g., image, video, text) based on the business intent.
+2.  **Parallel Content Generation:** Specialized agents for each content type run concurrently to produce the initial drafts.
+3.  **Iterative Validation Loop:** This is a critical quality gate. A `ValidationAgent` inspects the generated content against multiple criteria: brand identity, narrative alignment, QA, and correct use of design assets. If the content fails validation, it is sent back to the appropriate generation agent with feedback for revision. This loop continues until the content is approved.
+4.  **Queue & Schedule:** Once approved, a `SchedulingAgent` places the content into a prioritized queue for distribution.
+5.  **Platform Funnel:** A final `ParallelAgent` contains multiple `PlatformPublisher` agents (e.g., for X/Twitter, TikTok, YouTube), which adapt and publish the content to their respective channels.
+
+## User Journey / Workflow Diagram
+
+```mermaid
+flowchart TD
+    A[Business Intent] --> B{Campaign Type<br>Selector};
+    B --> C[Image Agent];
+    B --> D[Video Agent];
+    B --> E[Text Agent];
+
+    subgraph "Content Generation & Validation Loop"
+        direction LR
+        C --> F{Validation Agent<br>(QA, Narrative, Brand)};
+        D --> F;
+        E --> F;
+        F -- Revision Needed --> C;
+    end
+
+    F -- Approved --> G[Queue &<br>Scheduler];
+    G --> H{Platform Funnel};
+    H --> I[X/Twitter Post];
+    H --> J[TikTok Post];
+    H --> K[YouTube Post];
+```
 
 ## Consequences
 
 **Positive:**
-- **Modularity:** Each agent has a single, well-defined responsibility, making the system easier to understand, maintain, and extend.
-- **Separation of Concerns:** The pipeline clearly separates idea generation from synthesis, validation, and queuing.
-- **Built-in Quality Control:** The `BrandAssuranceAgent` ensures that no content proceeds without meeting brand standards.
-- **Reliability:** The use of structured, Pydantic-validated data passed between agents minimizes errors and ensures a predictable workflow.
+- **Enhanced Quality:** The explicit validation and revision loop ensures a much higher level of quality and brand alignment before publication.
+- **Greater Flexibility:** The architecture can handle multiple content types (image, video, text) in parallel.
+- **Increased Robustness:** The system can self-correct by revising content that doesn't meet standards, reducing the need for manual intervention.
+- **Scalable Distribution:** The final funnel structure allows for easily adding or removing social media platforms.
 
 **Negative:**
-- **Sequential Latency:** The total time for the workflow is the sum of the latencies of each sequential step (though the parallel ideation step optimizes its own stage).
-- **Complexity:** The multi-agent design introduces a level of complexity that requires careful management and observability.
+- **Increased Complexity:** The introduction of a feedback loop (`LoopAgent`) and more parallel stages makes the overall agent orchestration more complex to build and debug.
+- **Potential for Latency:** The revision loop could, in some cases, increase the total time to get content approved if the initial generations repeatedly fail validation.

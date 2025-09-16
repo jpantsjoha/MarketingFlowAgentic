@@ -16,8 +16,8 @@ async def main():
     runner = Runner(
         agent=root_agent, app_name="app", session_service=session_service
     )
-    query = "Launch a new marketing campaign for our new line of sustainable, reusable coffee cups. Our target audience is environmentally conscious millennials."
-    print(f"--- Running Marketing Agent with query: \"{query}\" ---")
+    query = "We are launching a new summer collection for our apparel shop which focuses on t-shirts with cat prints. We need marketing assets for a social media campaign on X/Twitter. The campaign should have a relaxed, holiday vibe, targeting young adults. Use our baseline cat images to generate realistic images of people wearing the t-shirts in outdoor settings like beaches, parks, or on vacation."
+    print(f"--- Running Visual Marketing Agent with query: \"{query}\" ---")
     async for event in runner.run_async(
         user_id="test_user",
         session_id="test_session",
