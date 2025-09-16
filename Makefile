@@ -28,6 +28,11 @@ setup-dev-env:
 test:
 	uv run pytest tests/unit && uv run pytest tests/integration
 
+# Run all validation steps: install, test, and end-to-end simulation
+validate-all: install test
+	@echo "Running end-to-end simulation..."
+	uv run python run_agent.py
+
 # Run code quality checks (codespell, ruff, mypy)
 lint:
 	uv sync --dev --extra lint

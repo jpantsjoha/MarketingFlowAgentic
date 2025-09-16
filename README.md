@@ -2,6 +2,8 @@
 
 An autonomous AI agent for generating visual marketing campaigns for an apparel shop, built with Google's Agent Development Kit (ADK).
 
+**Local ENV VARS required** in .env.local `GEMINI_API_KEY=nnnnn`
+
 ---
 
 ## 👕 Project Overview

@@ -16,3 +16,4 @@
 
 ## Phase 3: Testing
 - [ ] Add unit tests for any new, non-AI-dependent helper functions.
+- [ ] Integrate Selenium MCP for UI/UX validation.
